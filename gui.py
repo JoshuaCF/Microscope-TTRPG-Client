@@ -1,4 +1,5 @@
 from tkinter import *
+from typing import List, Union
 
 
 bg_color = "#303030"
@@ -20,6 +21,9 @@ label_style = {"background": bg_color,
                "font": default_font}
 frame_style = {"background": bg_color,
                "borderwidth": 0}
+canvas_style = {"background": bg_color,
+                "borderwidth": 0,
+                "highlightthickness": 0}
 listbox_style = {"background": active_bg,
                  "foreground": active_fg,
                  "font": default_font,
@@ -44,12 +48,15 @@ class Container(Frame):
     bg_color: str = bg_color
     depressed_bg_color: str = "#282828"
 
+    id: int  # For use with canvas
+    index: int  # For use with MainWindow
+
     def __init__(self, parent):
         super().__init__(parent, **frame_style)
         self.config(borderwidth=5, relief=RAISED)
 
-        self.bind("<ButtonPress-1>", self.press)
-        self.bind("<ButtonRelease-1>", self.release)
+    def register_event(self, trigger: str, callback, add=TRUE):
+        self.bind(trigger, callback, add)
 
     def press(self, e=None):
         self.config(background=self.depressed_bg_color, relief=SUNKEN)
@@ -59,20 +66,28 @@ class Container(Frame):
 
 
 class Divider(Container):
-    def __init__(self, parent, small=False):
+    plus: Label
+
+    def __init__(self, parent):
         super().__init__(parent)
 
         self.config(borderwidth=0)
 
-        size = 70
-        if small:
-            self.config(width=size/2)
-        else:
-            self.config(width=size)
+        self.plus = Label(self, **label_style)
+        self.plus.config(image=insert_img, borderwidth=4, relief=RAISED)
+        self.plus.place(rely=.5, relx=.5, anchor=CENTER)
 
-        plus = Label(self, **label_style)
-        plus.config(image=insert_img, borderwidth=4, relief=RAISED)
-        plus.place(rely=.5, relx=.5, anchor=CENTER)
+    def register_event(self, trigger: str, callback, add=TRUE):
+        super().register_event(trigger, callback, add)
+        self.plus.bind(trigger, callback, add)
+
+    def press(self, e=None):
+        super().press(e)
+        self.plus.config(background=self.depressed_bg_color)
+
+    def release(self, e=None):
+        super().press(e)
+        self.plus.config(background=self.bg_color)
 
 
 class Period(Container):
@@ -88,8 +103,6 @@ class Period(Container):
         self.text = text
         self.is_dark = is_dark
 
-        self.config(width=190)
-
         self.tone = Label(self, **label_style)
         self.tone.config(width=50, height=50)
         if self.is_dark:
@@ -98,20 +111,23 @@ class Period(Container):
             self.tone.config(image=light_img)
         self.tone.place(rely=.85, relx=.5, anchor=CENTER)
 
-        self.tone.bind("<ButtonPress-1>", self.press)
-        self.tone.bind("<ButtonRelease-1>", self.release)
-
         self.label = Label(self, **label_style)
         self.label.config(text=self.text, wraplength=170)
         self.label.place(rely=.35, relx=.5, anchor=CENTER)
 
-        self.label.bind("<ButtonPress-1>", self.press)
-        self.label.bind("<ButtonRelease-1>", self.release)
+    def register_event(self, trigger: str, callback, add=TRUE):
+        super().register_event(trigger, callback, add)
+        self.tone.bind(trigger, callback, add)
+        self.label.bind(trigger, callback, add)  # It was at this point that I realized I should probably have a list
+        # of child elements that I can just iterate through
+
+        # ...eh
 
     def press(self, e=None):
         super().press(e)
         self.tone.config(background=self.depressed_bg_color)
         self.label.config(background=self.depressed_bg_color)
+        print(e)
 
     def release(self, e=None):
         super().release(e)
@@ -124,14 +140,19 @@ class MainWindow:
 
     period_frame: Frame
 
-    period_timeline: Text
-    event_timeline: Text
+    period_timeline: Canvas
+
+    period_x = 200
+    period_y = 300
+    period_spacing_x = 70
+    period_items: List[Union[Divider, Period]] = []
+
     other_scroll: Scrollbar
 
     def __init__(self):
         self.window = Tk()
 
-        global dark_img, light_img, insert_img
+        global dark_img, light_img, insert_img  # There's probably a better way to do this, but I don't know it
         dark_img = PhotoImage(name="dark", file="Dark.png")
         light_img = PhotoImage(name="light", file="Light.png")
         insert_img = PhotoImage(name="insert", file="Insert.png")
@@ -141,10 +162,9 @@ class MainWindow:
 
         self.period_frame = Frame(self.window, **frame_style)
 
-        self.period_timeline = Text(self.period_frame, **frame_style)
+        self.period_timeline = Canvas(self.period_frame, **canvas_style)
         self.other_scroll = Scrollbar(self.period_frame)
-        self.period_timeline.config(width=4, height=1, font=("Courier", 170), wrap=NONE, state=DISABLED,
-                                    xscrollcommand=self.other_scroll.set)
+        self.period_timeline.config(width=800, height=self.period_y, xscrollcommand=self.other_scroll.set)
         self.period_timeline.pack(side=TOP, expand=TRUE, fill=X)
 
         self.other_scroll.config(orient=HORIZONTAL, command=self.period_timeline.xview)
@@ -152,46 +172,56 @@ class MainWindow:
 
         self.period_frame.pack(side=TOP, expand=FALSE, fill=X, padx=8, pady=8)
 
-        div = Divider(self.period_timeline, True)
-        self.period_timeline.window_create(END, window=div, align=CENTER, stretch=TRUE)
+        self.period_items.append(Divider(self.period_timeline))
+        self.period_items[0].id = self.period_timeline.create_window(0, 0, window=self.period_items[0])
+        self.period_items[0].index = 0
 
-        period = Period(self.period_timeline,
-                        "The Rise of Machine Learning, Algorithmic Solutions to Humanity's Problems (START)", False)
-        self.period_timeline.window_create(END, window=period, align=CENTER, stretch=TRUE)
+        self.insert_period(Period(self.period_timeline,
+                                  "The Rise of Machine Learning, Algorithmic Solutions to Humanity's Problems (START)",
+                                  False), 0)
 
-        div = Divider(self.period_timeline)
-        self.period_timeline.window_create(END, window=div, align=CENTER, stretch=TRUE)
+        self.insert_period(Period(self.period_timeline, "An Age of Prosperity, AIs Solve Major World Issues", False), 2)
 
-        period = Period(self.period_timeline,
-                        "An Age of Prosperity, AIs Solve Major World Issues", False)
-        self.period_timeline.window_create(END, window=period, align=CENTER, stretch=TRUE)
+        self.insert_period(Period(self.period_timeline, "Value Drift Causes Breakdown of World Infrastructure, "
+                                                        "Self-Replicating Machines Threaten Humanity", True), 4)
 
-        div = Divider(self.period_timeline)
-        self.period_timeline.window_create(END, window=div, align=CENTER, stretch=TRUE)
+        self.insert_period(Period(self.period_timeline, "Machines Decide to Study and Learn from Humanity, "
+                                                        "all Humans Are Uploaded into an Eternal Simulation, "
+                                                        "Effective Immortality (END)", False), 6)
 
-        period = Period(self.period_timeline,
-                        "Value Drift Causes Breakdown of World Infrastructure, "
-                        "Self-Replicating Machines Threaten Humanity", True)
-        self.period_timeline.window_create(END, window=period, align=CENTER, stretch=TRUE)
+    def insert_period(self, period: Period, index: int):
+        self.period_items.insert(index, Divider(self.period_timeline))
+        self.period_items.insert(index+1, period)
 
-        div = Divider(self.period_timeline)
-        self.period_timeline.window_create(END, window=div, align=CENTER, stretch=TRUE)
+        self.period_items[index].id = self.period_timeline.create_window(0, 0, window=self.period_items[index])
+        self.period_items[index+1].id = self.period_timeline.create_window(0, 0, window=self.period_items[index+1])
 
-        period = Period(self.period_timeline,
-                        "Machines Decide to Study and Learn from Humanity, all Humans Are Uploaded into an "
-                        "Eternal Simulation, Effective Immortality (END)", False)
-        self.period_timeline.window_create(END, window=period, align=CENTER, stretch=TRUE)
+        for i in range(len(self.period_items)):
+            self.period_items[i].index = i
+        self.update_period_canvas()
 
-        div = Divider(self.period_timeline, True)
-        self.period_timeline.window_create(END, window=div, align=CENTER, stretch=TRUE)
+    def delete_period(self, period: Period):
+        pass
 
-        # add_period = Button(self.period_timeline, **self.button_style)
-        # add_period.config(width=25, text="Add Period", command=self.insert_period)
-        #
-        # self.period_timeline.window_create(END, window=add_period, align=CENTER, stretch=TRUE)
+    def update_period_canvas(self):
+        period_item_size = len(self.period_items)
+        running_width = 0
+        for i in range(period_item_size):
+            if i == 0 or i == period_item_size-1:
+                self.period_items[i].config(width=self.period_spacing_x / 2, height=self.period_y)
+                self.period_timeline.moveto(self.period_items[i].id, running_width, 0)
 
-    # def insert_period(self):
-    #     new_period = Button(self.period_timeline, **self.button_style)
-    #     new_period.config(width=25, text="THIS IS A NEW PERIOD")
-    #
-    #     self.period_timeline.window_create(END + " - 2 chars", window=new_period, align=CENTER, stretch=TRUE)
+                running_width += self.period_spacing_x / 2
+            elif i % 2 == 0:
+                self.period_items[i].config(width=self.period_spacing_x, height=self.period_y)
+                self.period_timeline.moveto(self.period_items[i].id, running_width, 0)
+
+                running_width += self.period_spacing_x
+            else:
+                self.period_items[i].config(width=self.period_x, height=self.period_y)
+                self.period_timeline.moveto(self.period_items[i].id, running_width, 0)
+
+                running_width += self.period_x
+
+        self.period_timeline.config(scrollregion=self.period_timeline.bbox("all"))
+        print(self.period_timeline.config("scrollregion"))

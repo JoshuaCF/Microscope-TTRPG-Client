@@ -8,6 +8,7 @@ active_bg = "#404040"
 active_fg = "#e0e0e0"
 select_bg = "#5050f0"
 default_font = ("Courier", 10)
+large_font = ("Courier", 25)
 
 button_style = {"background": bg_color,
                 "foreground": fg_color,
@@ -19,6 +20,10 @@ label_style = {"background": bg_color,
                "foreground": fg_color,
                "relief": FLAT,
                "font": default_font}
+large_label_style = {"background": bg_color,
+                     "foreground": fg_color,
+                     "relief": FLAT,
+                     "font": large_font}
 frame_style = {"background": bg_color,
                "borderwidth": 0}
 canvas_style = {"background": bg_color,
@@ -30,6 +35,11 @@ listbox_style = {"background": active_bg,
                  "relief": FLAT,
                  "highlightthickness": 0,
                  "selectbackground": select_bg}
+radio_style = {"background": active_bg,
+               "foreground": active_fg,
+               "activebackground": active_bg,
+               "activeforeground": active_fg,
+               "selectcolor": bg_color}
 text_style = {"background": active_bg,
               "foreground": active_fg,
               "font": default_font,
@@ -51,8 +61,11 @@ class Container(Frame):
     id: int  # For use with canvas
     index: int  # For use with MainWindow
 
-    def __init__(self, parent):
+    mw: "MainWindow"
+
+    def __init__(self, parent, mw):
         super().__init__(parent, **frame_style)
+        self.mw = mw
         self.config(borderwidth=5, relief=RAISED)
 
     def register_event(self, trigger: str, callback, add=TRUE):
@@ -65,11 +78,11 @@ class Container(Frame):
         self.config(background=self.bg_color, relief=RAISED)
 
 
-class Divider(Container):
+class PeriodDivider(Container):
     plus: Label
 
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self, parent, mw):
+        super().__init__(parent, mw)
 
         self.config(borderwidth=0)
 
@@ -77,28 +90,35 @@ class Divider(Container):
         self.plus.config(image=insert_img, borderwidth=4, relief=RAISED)
         self.plus.place(rely=.5, relx=.5, anchor=CENTER)
 
+        self.register_event("<ButtonPress-1>", self.on_click)
+
+    def on_click(self, e=None):
+        self.mw.p_selection(self.index)
+
     def register_event(self, trigger: str, callback, add=TRUE):
         super().register_event(trigger, callback, add)
         self.plus.bind(trigger, callback, add)
 
     def press(self, e=None):
         super().press(e)
+        self.config(background=self.depressed_bg_color)
         self.plus.config(background=self.depressed_bg_color)
 
     def release(self, e=None):
         super().press(e)
+        self.config(background=self.bg_color)
         self.plus.config(background=self.bg_color)
 
 
-class Period(Container):
+class MPeriod(Container):
     text: str
     is_dark: bool
 
     tone: Label
     label: Label
 
-    def __init__(self, parent, text: str, is_dark: bool):
-        super().__init__(parent)
+    def __init__(self, parent, text: str, is_dark: bool, mw):
+        super().__init__(parent, mw)
 
         self.text = text
         self.is_dark = is_dark
@@ -115,6 +135,11 @@ class Period(Container):
         self.label.config(text=self.text, wraplength=170)
         self.label.place(rely=.35, relx=.5, anchor=CENTER)
 
+        self.register_event("<ButtonPress-1>", self.on_click)
+
+    def on_click(self, e=None):
+        self.mw.p_selection(self.index)
+
     def register_event(self, trigger: str, callback, add=TRUE):
         super().register_event(trigger, callback, add)
         self.tone.bind(trigger, callback, add)
@@ -127,7 +152,6 @@ class Period(Container):
         super().press(e)
         self.tone.config(background=self.depressed_bg_color)
         self.label.config(background=self.depressed_bg_color)
-        print(e)
 
     def release(self, e=None):
         super().release(e)
@@ -135,8 +159,130 @@ class Period(Container):
         self.label.config(background=self.bg_color)
 
 
-class MainWindow:
-    window: Tk
+class ControlPanel(Frame):
+    mw: "MainWindow"
+
+    title_label: Label
+    cur_frame: Frame = None
+
+    p_insert_frame: Frame
+    p_edit_frame: Frame
+    p_edit_tone: BooleanVar
+    p_edit_text: Text
+
+    e_insert_frame: Frame
+    e_edit_frame: Frame
+    e_edit_tone: BooleanVar
+    e_edit_text: Text
+
+    s_insert_frame: Frame
+    s_edit_frame: Frame
+
+    def __init__(self, parent, mw):
+        super().__init__(parent, **frame_style)
+        self.mw = mw
+
+        self.config(background=active_bg)
+
+        self.title_label = Label(self, **large_label_style)
+        self.title_label.config(text="Controls Panel", width=16, background=active_bg)
+        self.title_label.pack(side=TOP, fill=X)
+
+        self.p_insert_frame = Frame(self, **frame_style)
+        self.p_insert_frame.config(background=active_bg)
+
+        p_insert_label = Label(self.p_insert_frame, **label_style)
+        p_insert_label.config(text="Period Label:", background=active_bg)
+        p_insert_label.pack(side=TOP, anchor=NW)
+
+        p_insert_text = Text(self.p_insert_frame, **text_style)
+        p_insert_text.config(background=bg_color, wrap=WORD, width=10, height=2)
+        p_insert_text.pack(side=TOP, fill=BOTH, expand=TRUE, padx=3, pady=3)
+
+        p_insert_tone = BooleanVar()
+        p_insert_radio_light = Radiobutton(self.p_insert_frame, **radio_style)
+        p_insert_radio_light.config(variable=p_insert_tone, value=False, text="Light")
+        p_insert_radio_light.pack(side=TOP, anchor=NW)
+
+        p_insert_radio_dark = Radiobutton(self.p_insert_frame, **radio_style)
+        p_insert_radio_dark.config(variable=p_insert_tone, value=True, text="Dark")
+        p_insert_radio_dark.pack(side=TOP, anchor=NW)
+        p_insert_tone.set(False)
+
+        p_insert_submit = Button(self.p_insert_frame, **button_style)
+        p_insert_submit.config(background=active_bg, text="Insert Period",
+                               command=lambda: self.mw.insert_period(mw.cur_selection.index, MPeriod(
+                                   self.mw.period_timeline,
+                                   p_insert_text.get("1.0", END),
+                                   p_insert_tone.get(),
+                                   self.mw)))
+        p_insert_submit.pack(side=TOP, anchor=NW)
+
+        self.p_edit_frame = Frame(self, **frame_style)
+        self.p_edit_frame.config(background=active_bg)
+
+        p_edit_label = Label(self.p_edit_frame, **label_style)
+        p_edit_label.config(text="Period Label:", background=active_bg)
+        p_edit_label.pack(side=TOP, anchor=NW)
+
+        self.p_edit_text = Text(self.p_edit_frame, **text_style)
+        self.p_edit_text.config(background=bg_color, wrap=WORD, width=10, height=2)
+        self.p_edit_text.pack(side=TOP, fill=BOTH, expand=TRUE, padx=3, pady=3)
+
+        self.p_edit_tone = BooleanVar()
+        p_edit_radio_light = Radiobutton(self.p_edit_frame, **radio_style)
+        p_edit_radio_light.config(variable=self.p_edit_tone, value=False, text="Light")
+        p_edit_radio_light.pack(side=TOP, anchor=NW)
+
+        p_edit_radio_dark = Radiobutton(self.p_edit_frame, **radio_style)
+        p_edit_radio_dark.config(variable=self.p_edit_tone, value=True, text="Dark")
+        p_edit_radio_dark.pack(side=TOP, anchor=NW)
+        self.p_edit_tone.set(False)
+
+        p_edit_submit = Button(self.p_edit_frame, **button_style)
+        p_edit_submit.config(background=active_bg, text="Edit Period",
+                             command=lambda: self.mw.edit_period(mw.cur_selection.index, MPeriod(
+                                             self.mw.period_timeline,
+                                             self.p_edit_text.get("1.0", END),
+                                             self.p_edit_tone.get(),
+                                             self.mw)))
+        p_edit_submit.pack(side=TOP, anchor=NW)
+
+        p_edit_delete = Button(self.p_edit_frame, **button_style)
+        p_edit_delete.config(background=active_bg, text="Delete Period",
+                             command=lambda: self.mw.delete_period(self.mw.cur_selection))
+        p_edit_delete.pack(side=TOP, anchor=NW)
+
+    def set_p_insert(self):
+        if self.cur_frame is not None:
+            self.cur_frame.pack_forget()
+        self.cur_frame = self.p_insert_frame
+        self.p_insert_frame.pack(side=TOP, fill=BOTH, expand=TRUE)
+
+    def set_p_edit(self, p: MPeriod):
+        if self.cur_frame is not None:
+            self.cur_frame.pack_forget()
+        self.cur_frame = self.p_edit_frame
+        self.p_edit_frame.pack(side=TOP, fill=BOTH, expand=TRUE)
+        self.p_edit_tone.set(p.is_dark)
+        self.p_edit_text.delete("1.0", END)
+        self.p_edit_text.insert("1.0", p.text)
+
+    def set_e_insert(self):
+        pass
+
+    def set_e_edit(self):
+        pass
+
+    def set_s_insert(self):
+        pass
+
+    def set_s_edit(self):
+        pass
+
+
+class MainWindow(Tk):
+    controls: ControlPanel
 
     period_frame: Frame
 
@@ -145,22 +291,27 @@ class MainWindow:
     period_x = 200
     period_y = 300
     period_spacing_x = 70
-    period_items: List[Union[Divider, Period]] = []
+    period_items: List[Union[PeriodDivider, MPeriod]] = []
 
     other_scroll: Scrollbar
 
+    cur_selection: Union[MPeriod] = None
+
     def __init__(self):
-        self.window = Tk()
+        super().__init__()
 
         global dark_img, light_img, insert_img  # There's probably a better way to do this, but I don't know it
         dark_img = PhotoImage(name="dark", file="Dark.png")
         light_img = PhotoImage(name="light", file="Light.png")
         insert_img = PhotoImage(name="insert", file="Insert.png")
 
-        self.window.config(background=bg_color)
-        self.window.title("Microscope TTRPG")
+        self.config(background=bg_color)
+        self.title("Microscope TTRPG")
 
-        self.period_frame = Frame(self.window, **frame_style)
+        self.controls = ControlPanel(self, self)
+        self.controls.pack(side=RIGHT, fill=Y)
+
+        self.period_frame = Frame(self, **frame_style)
 
         self.period_timeline = Canvas(self.period_frame, **canvas_style)
         self.other_scroll = Scrollbar(self.period_frame)
@@ -170,27 +321,51 @@ class MainWindow:
         self.other_scroll.config(orient=HORIZONTAL, command=self.period_timeline.xview)
         self.other_scroll.pack(side=TOP, expand=FALSE, fill=X)
 
-        self.period_frame.pack(side=TOP, expand=FALSE, fill=X, padx=8, pady=8)
+        self.period_frame.pack(side=TOP, expand=FALSE, fill=X)
 
-        self.period_items.append(Divider(self.period_timeline))
+        self.period_items.append(PeriodDivider(self.period_timeline, self))
         self.period_items[0].id = self.period_timeline.create_window(0, 0, window=self.period_items[0])
         self.period_items[0].index = 0
 
-        self.insert_period(Period(self.period_timeline,
-                                  "The Rise of Machine Learning, Algorithmic Solutions to Humanity's Problems (START)",
-                                  False), 0)
+        self.insert_period(0, MPeriod(self.period_timeline, "The Rise of Machine Learning, Algorithmic Solutions "
+                                                            "to Humanity's Problems (START)", False, self))
 
-        self.insert_period(Period(self.period_timeline, "An Age of Prosperity, AIs Solve Major World Issues", False), 2)
+        self.insert_period(2, MPeriod(self.period_timeline, "An Age of Prosperity, AIs Solve Major World Issues",
+                                      False, self))
 
-        self.insert_period(Period(self.period_timeline, "Value Drift Causes Breakdown of World Infrastructure, "
-                                                        "Self-Replicating Machines Threaten Humanity", True), 4)
+        self.insert_period(2, MPeriod(self.period_timeline, "Delete me!", True, self))
 
-        self.insert_period(Period(self.period_timeline, "Machines Decide to Study and Learn from Humanity, "
-                                                        "all Humans Are Uploaded into an Eternal Simulation, "
-                                                        "Effective Immortality (END)", False), 6)
+        self.insert_period(6, MPeriod(self.period_timeline, "Value Drift Causes Breakdown of World Infrastructure, "
+                                                            "Self-Replicating Machines Threaten Humanity", True, self))
 
-    def insert_period(self, period: Period, index: int):
-        self.period_items.insert(index, Divider(self.period_timeline))
+        self.insert_period(8, MPeriod(self.period_timeline, "Machines Decide to Study and Learn from Humanity, all "
+                                                            "Humans Are Uploaded into an Eternal Simulation, Effective "
+                                                            "Immortality (END)", False, self))
+
+        self.delete_period(self.period_items[3])
+
+    def p_selection(self, index: int):
+        if self.cur_selection is not None:
+            self.cur_selection.release()
+
+        self.cur_selection = self.period_items[index]
+        self.cur_selection.press()
+
+        if isinstance(self.cur_selection, PeriodDivider):
+            self.controls.set_p_insert()
+        elif isinstance(self.cur_selection, MPeriod):
+            self.controls.set_p_edit(self.cur_selection)
+
+    def edit_period(self, index: int, period: MPeriod):
+        self.period_timeline.delete(self.period_items[index].id)
+        self.period_items[index] = period
+        self.period_items[index].id = self.period_timeline.create_window(0, 0, window=self.period_items[index])
+        self.period_items[index].index = index
+
+        self.update_period_canvas()
+
+    def insert_period(self, index: int, period: MPeriod):
+        self.period_items.insert(index, PeriodDivider(self.period_timeline, self))
         self.period_items.insert(index+1, period)
 
         self.period_items[index].id = self.period_timeline.create_window(0, 0, window=self.period_items[index])
@@ -198,10 +373,19 @@ class MainWindow:
 
         for i in range(len(self.period_items)):
             self.period_items[i].index = i
+
         self.update_period_canvas()
 
-    def delete_period(self, period: Period):
-        pass
+    def delete_period(self, period: MPeriod):
+        index = self.period_items.index(period)
+        self.period_timeline.delete(self.period_items[index].id)
+        self.period_timeline.delete(self.period_items[index+1].id)
+        del self.period_items[index:index+2]
+
+        for i in range(len(self.period_items)):
+            self.period_items[i].index = i
+
+        self.update_period_canvas()
 
     def update_period_canvas(self):
         period_item_size = len(self.period_items)
@@ -224,4 +408,3 @@ class MainWindow:
                 running_width += self.period_x
 
         self.period_timeline.config(scrollregion=self.period_timeline.bbox("all"))
-        print(self.period_timeline.config("scrollregion"))

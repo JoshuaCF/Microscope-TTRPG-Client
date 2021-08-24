@@ -157,7 +157,7 @@ class MEvent(Container):  # This is the reason for the "M" prefix (M=Microscope)
         self.tone.place(rely=.85, relx=.125, anchor=CENTER)
 
         self.label = Label(self, **label_style)
-        self.label.config(text=self.text, wraplength=200)
+        self.label.config(text=self.text, wraplength=250)
         self.label.place(rely=.35, relx=.5, anchor=CENTER)
 
         self.register_event("<ButtonPress-1>", self.on_click)

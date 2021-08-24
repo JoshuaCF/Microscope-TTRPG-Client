@@ -63,7 +63,7 @@ class Container(Frame):
 
     mw: "MainWindow"
 
-    def __init__(self, parent, mw):
+    def __init__(self, parent, mw: "MainWindow"):
         super().__init__(parent, **frame_style)
         self.mw = mw
         self.config(borderwidth=5, relief=RAISED)
@@ -78,7 +78,7 @@ class Container(Frame):
         self.config(background=self.bg_color, relief=RAISED)
 
 
-class PeriodDivider(Container):
+class Divider(Container):
     plus: Label
 
     def __init__(self, parent, mw):
@@ -93,7 +93,7 @@ class PeriodDivider(Container):
         self.register_event("<ButtonPress-1>", self.on_click)
 
     def on_click(self, e=None):
-        self.mw.p_selection(self.index)
+        pass
 
     def register_event(self, trigger: str, callback, add=TRUE):
         super().register_event(trigger, callback, add)
@@ -110,6 +110,78 @@ class PeriodDivider(Container):
         self.plus.config(background=self.bg_color)
 
 
+class PeriodDivider(Divider):
+    def __init__(self, parent, mw):
+        super().__init__(parent, mw)
+
+    def on_click(self, e=None):
+        self.mw.p_selection(self.index)
+
+
+class EventDivider(Divider):
+    parent_period: "MPeriod"
+
+    def __init__(self, parent, parent_period: "MPeriod", mw: "MainWindow"):
+        super().__init__(parent, mw)
+        self.parent_period = parent_period
+
+    def on_click(self, e=None):
+        pass
+
+
+class MEvent(Container):  # This is the reason for the "M" prefix (M=Microscope). "Event" is already a class from tk.
+    text: str
+    is_dark: bool
+
+    parent_period: "MPeriod"
+
+    tone: Label
+    label: Label
+    scene_count: Label
+
+    def __init__(self, parent, text: str, is_dark: bool, parent_period: "MPeriod", mw):
+        super().__init__(parent, mw)
+
+        self.text = text
+        self.is_dark = is_dark
+        self.parent_period = parent_period
+
+        self.tone = Label(self, **label_style)
+        self.tone.config(width=50, height=50)
+        if self.is_dark:
+            self.tone.config(image=dark_img)
+        else:
+            self.tone.config(image=light_img)
+        self.tone.place(rely=.85, relx=.25, anchor=CENTER)
+
+        self.label = Label(self, **label_style)
+        self.label.config(text=self.text, wraplength=270)
+        self.label.place(rely=.35, relx=.5, anchor=CENTER)
+
+        self.register_event("<ButtonPress-1>", self.on_click)
+
+    def on_click(self, e=None):
+        self.mw.p_selection(self.index)
+
+    def register_event(self, trigger: str, callback, add=TRUE):
+        super().register_event(trigger, callback, add)
+        self.tone.bind(trigger, callback, add)
+        self.label.bind(trigger, callback, add)  # It was at this point that I realized I should probably have a list
+        # of child elements that I can just iterate through
+
+        # ...eh
+
+    def press(self, e=None):
+        super().press(e)
+        self.tone.config(background=self.depressed_bg_color)
+        self.label.config(background=self.depressed_bg_color)
+
+    def release(self, e=None):
+        super().release(e)
+        self.tone.config(background=self.bg_color)
+        self.label.config(background=self.bg_color)
+
+
 class MPeriod(Container):
     text: str
     is_dark: bool
@@ -117,11 +189,14 @@ class MPeriod(Container):
     tone: Label
     label: Label
 
+    event_items: List[Union[MEvent, EventDivider]]
+
     def __init__(self, parent, text: str, is_dark: bool, mw):
         super().__init__(parent, mw)
 
         self.text = text
         self.is_dark = is_dark
+        self.event_items = [EventDivider(self.mw.event_timeline, self, self.mw)]
 
         self.tone = Label(self, **label_style)
         self.tone.config(width=50, height=50)
@@ -165,18 +240,19 @@ class ControlPanel(Frame):
     title_label: Label
     cur_frame: Frame = None
 
-    p_insert_frame: Frame
     p_edit_frame: Frame
     p_edit_tone: BooleanVar
     p_edit_text: Text
 
-    e_insert_frame: Frame
     e_edit_frame: Frame
     e_edit_tone: BooleanVar
     e_edit_text: Text
 
-    s_insert_frame: Frame
     s_edit_frame: Frame
+    s_edit_tone: BooleanVar
+    s_edit_question: Text
+    s_edit_setting: Text
+    s_edit_answer: Text
 
     def __init__(self, parent, mw):
         super().__init__(parent, **frame_style)
@@ -185,38 +261,8 @@ class ControlPanel(Frame):
         self.config(background=active_bg)
 
         self.title_label = Label(self, **large_label_style)
-        self.title_label.config(text="Controls Panel", width=16, background=active_bg)
+        self.title_label.config(text="Controls Panel", width=16, background=active_bg, foreground="#f0f0f0")
         self.title_label.pack(side=TOP, fill=X)
-
-        self.p_insert_frame = Frame(self, **frame_style)
-        self.p_insert_frame.config(background=active_bg)
-
-        p_insert_label = Label(self.p_insert_frame, **label_style)
-        p_insert_label.config(text="Period Label:", background=active_bg)
-        p_insert_label.pack(side=TOP, anchor=NW)
-
-        p_insert_text = Text(self.p_insert_frame, **text_style)
-        p_insert_text.config(background=bg_color, wrap=WORD, width=10, height=2)
-        p_insert_text.pack(side=TOP, fill=BOTH, expand=TRUE, padx=3, pady=3)
-
-        p_insert_tone = BooleanVar()
-        p_insert_radio_light = Radiobutton(self.p_insert_frame, **radio_style)
-        p_insert_radio_light.config(variable=p_insert_tone, value=False, text="Light")
-        p_insert_radio_light.pack(side=TOP, anchor=NW)
-
-        p_insert_radio_dark = Radiobutton(self.p_insert_frame, **radio_style)
-        p_insert_radio_dark.config(variable=p_insert_tone, value=True, text="Dark")
-        p_insert_radio_dark.pack(side=TOP, anchor=NW)
-        p_insert_tone.set(False)
-
-        p_insert_submit = Button(self.p_insert_frame, **button_style)
-        p_insert_submit.config(background=active_bg, text="Insert Period",
-                               command=lambda: self.mw.insert_period(mw.cur_selection.index, MPeriod(
-                                   self.mw.period_timeline,
-                                   p_insert_text.get("1.0", END),
-                                   p_insert_tone.get(),
-                                   self.mw)))
-        p_insert_submit.pack(side=TOP, anchor=NW)
 
         self.p_edit_frame = Frame(self, **frame_style)
         self.p_edit_frame.config(background=active_bg)
@@ -243,7 +289,7 @@ class ControlPanel(Frame):
         p_edit_submit.config(background=active_bg, text="Edit Period",
                              command=lambda: self.mw.edit_period(mw.cur_selection.index, MPeriod(
                                              self.mw.period_timeline,
-                                             self.p_edit_text.get("1.0", END),
+                                             self.p_edit_text.get("1.0", END + "- 1 chars"),
                                              self.p_edit_tone.get(),
                                              self.mw)))
         p_edit_submit.pack(side=TOP, anchor=NW)
@@ -253,11 +299,9 @@ class ControlPanel(Frame):
                              command=lambda: self.mw.delete_period(self.mw.cur_selection))
         p_edit_delete.pack(side=TOP, anchor=NW)
 
-    def set_p_insert(self):
+    def clear_controls(self):
         if self.cur_frame is not None:
             self.cur_frame.pack_forget()
-        self.cur_frame = self.p_insert_frame
-        self.p_insert_frame.pack(side=TOP, fill=BOTH, expand=TRUE)
 
     def set_p_edit(self, p: MPeriod):
         if self.cur_frame is not None:
@@ -268,13 +312,7 @@ class ControlPanel(Frame):
         self.p_edit_text.delete("1.0", END)
         self.p_edit_text.insert("1.0", p.text)
 
-    def set_e_insert(self):
-        pass
-
     def set_e_edit(self):
-        pass
-
-    def set_s_insert(self):
         pass
 
     def set_s_edit(self):
@@ -287,11 +325,23 @@ class MainWindow(Tk):
     period_frame: Frame
 
     period_timeline: Canvas
+    event_timeline: Canvas
 
-    period_x = 200
-    period_y = 300
-    period_spacing_x = 70
+    # The game is meant to be played with index cards. To me, index cards are normally oriented with the long side
+    # horizontal. Consider the width to be the long side and the height to be the short side of an index card.
+    card_height = 230
+    card_width = 300
+
+    # A lot of these assignments are somewhat redundant and I could easily mix around the variables in the code itself,
+    # but I do it like this in hopes that it will be clear to myself and others where the numbers come from.
+    period_x = card_height
+    period_y = card_width
+    period_spacing_x = card_width - card_height
     period_items: List[Union[PeriodDivider, MPeriod]] = []
+
+    event_x = card_width
+    event_y = card_height
+    event_spacing_y = card_width - card_height
 
     other_scroll: Scrollbar
 
@@ -318,7 +368,7 @@ class MainWindow(Tk):
         self.period_timeline.config(width=800, height=self.period_y, xscrollcommand=self.other_scroll.set)
         self.period_timeline.pack(side=TOP, expand=TRUE, fill=X)
 
-        self.other_scroll.config(orient=HORIZONTAL, command=self.period_timeline.xview)
+        self.other_scroll.config(orient=HORIZONTAL, command=self.p_scroll)
         self.other_scroll.pack(side=TOP, expand=FALSE, fill=X)
 
         self.period_frame.pack(side=TOP, expand=FALSE, fill=X)
@@ -326,34 +376,21 @@ class MainWindow(Tk):
         self.period_items.append(PeriodDivider(self.period_timeline, self))
         self.period_items[0].id = self.period_timeline.create_window(0, 0, window=self.period_items[0])
         self.period_items[0].index = 0
+        self.update_canvases()
 
-        self.insert_period(0, MPeriod(self.period_timeline, "The Rise of Machine Learning, Algorithmic Solutions "
-                                                            "to Humanity's Problems (START)", False, self))
-
-        self.insert_period(2, MPeriod(self.period_timeline, "An Age of Prosperity, AIs Solve Major World Issues",
-                                      False, self))
-
-        self.insert_period(2, MPeriod(self.period_timeline, "Delete me!", True, self))
-
-        self.insert_period(6, MPeriod(self.period_timeline, "Value Drift Causes Breakdown of World Infrastructure, "
-                                                            "Self-Replicating Machines Threaten Humanity", True, self))
-
-        self.insert_period(8, MPeriod(self.period_timeline, "Machines Decide to Study and Learn from Humanity, all "
-                                                            "Humans Are Uploaded into an Eternal Simulation, Effective "
-                                                            "Immortality (END)", False, self))
-
-        self.delete_period(self.period_items[3])
+    def p_scroll(self, start, end):
+        self.period_timeline.xview(start, end)
 
     def p_selection(self, index: int):
         if self.cur_selection is not None:
             self.cur_selection.release()
-
         self.cur_selection = self.period_items[index]
-        self.cur_selection.press()
 
         if isinstance(self.cur_selection, PeriodDivider):
-            self.controls.set_p_insert()
+            self.insert_period(index, MPeriod(self.period_timeline, "New Period", False, self))
+            self.controls.clear_controls()
         elif isinstance(self.cur_selection, MPeriod):
+            self.cur_selection.press()
             self.controls.set_p_edit(self.cur_selection)
 
     def edit_period(self, index: int, period: MPeriod):
@@ -362,7 +399,7 @@ class MainWindow(Tk):
         self.period_items[index].id = self.period_timeline.create_window(0, 0, window=self.period_items[index])
         self.period_items[index].index = index
 
-        self.update_period_canvas()
+        self.update_canvases()
 
     def insert_period(self, index: int, period: MPeriod):
         self.period_items.insert(index, PeriodDivider(self.period_timeline, self))
@@ -371,10 +408,13 @@ class MainWindow(Tk):
         self.period_items[index].id = self.period_timeline.create_window(0, 0, window=self.period_items[index])
         self.period_items[index+1].id = self.period_timeline.create_window(0, 0, window=self.period_items[index+1])
 
+        self.period_items[index].event_items[0].id = \
+            self.event_timeline.create_window(0, 0, window=self.period_items[index].event_items[0])
+
         for i in range(len(self.period_items)):
             self.period_items[i].index = i
 
-        self.update_period_canvas()
+        self.update_canvases()
 
     def delete_period(self, period: MPeriod):
         index = self.period_items.index(period)
@@ -385,9 +425,9 @@ class MainWindow(Tk):
         for i in range(len(self.period_items)):
             self.period_items[i].index = i
 
-        self.update_period_canvas()
+        self.update_canvases()
 
-    def update_period_canvas(self):
+    def update_canvases(self):
         period_item_size = len(self.period_items)
         running_width = 0
         for i in range(period_item_size):

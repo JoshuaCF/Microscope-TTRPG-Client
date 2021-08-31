@@ -547,15 +547,20 @@ class ControlPanel(Frame):
 class MainWindow(Tk):
     controls: ControlPanel
 
-    upper_frame: Frame
     padding_frame: Frame
+    upper_frame: Frame
+    lower_frame: Frame
+    minimize_frame: Frame  # This has content that can be minimized to make more room in the GUI
+
+    minimize_control_button: Button
+    is_minimized: bool = True
+
     event_frame: Frame
     scene_frame: Frame
 
     period_timeline: Canvas
     event_timeline: Canvas
     scene_timeline: Canvas
-    show_scenes: bool = True
 
     # The game is meant to be played with index cards. To me, index cards are normally oriented with the long side
     # horizontal. Consider the width to be the long side and the height to be the short side of an index card.
@@ -630,7 +635,17 @@ class MainWindow(Tk):
 
         self.upper_frame.pack(side=TOP, expand=TRUE, fill=BOTH)
 
-        self.scene_frame = Frame(self.padding_frame, **frame_style)
+        self.lower_frame = Frame(self.padding_frame, **frame_style)
+        self.lower_frame.config(background=active_bg)
+
+        self.minimize_control_button = Button(self.lower_frame, **button_style)
+        self.minimize_control_button.config(image=maximize_img, command=self.minimize_control)
+        self.minimize_control_button.pack(side=RIGHT, anchor=N, padx=4, pady=4)
+
+        self.minimize_frame = Frame(self.lower_frame, **frame_style)
+        self.minimize_frame.config(background=active_bg)
+
+        self.scene_frame = Frame(self.minimize_frame, **frame_style)
         self.scene_frame.config(background=active_bg)
 
         self.scene_scroll = Scrollbar(self.scene_frame)
@@ -642,6 +657,8 @@ class MainWindow(Tk):
         self.scene_scroll.pack(side=TOP, expand=FALSE, fill=X)
 
         self.scene_frame.pack(side=TOP, expand=FALSE, fill=X, padx=4, pady=4)
+
+        self.lower_frame.pack(side=TOP, expand=FALSE, fill=X)
 
         self.padding_frame.pack(side=TOP, expand=TRUE, fill=BOTH, padx=8, pady=8)
 
@@ -900,3 +917,13 @@ class MainWindow(Tk):
                     running_width += self.period_x
 
         self.scene_timeline.config(scrollregion=self.scene_timeline.bbox("all"))
+
+    def minimize_control(self):
+        if self.is_minimized:
+            self.is_minimized = False
+            self.minimize_frame.pack(side=TOP, expand=FALSE, fill=X)
+            self.minimize_control_button.config(image=minimize_img)
+        else:
+            self.is_minimized = True
+            self.minimize_frame.pack_forget()
+            self.minimize_control_button.config(image=maximize_img)
